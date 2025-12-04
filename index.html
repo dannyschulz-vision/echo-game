@@ -2,13 +2,16 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ECHO - Das Erinnerungsspiel</title>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --bg-color: #050505;
             --ui-color: #ffffff;
             --accent-red: #ff003c;
+            --accent-green: #00ff66;
             --glass: rgba(255, 255, 255, 0.1);
             
             /* Arrow Colors */
@@ -21,18 +24,25 @@
         * {
             box-sizing: border-box;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
+
+        /* Scrollbar Styling for Info Text */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); }
+        ::-webkit-scrollbar-thumb { background: var(--accent-red); border-radius: 4px; }
 
         body {
             margin: 0;
             padding: 0;
             background-color: var(--bg-color);
             color: var(--ui-color);
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Verdana', sans-serif;
             height: 100vh;
             width: 100vw;
             overflow: hidden;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             transition: background-color 0.1s ease;
@@ -48,7 +58,7 @@
             z-index: 0;
         }
 
-        /* Level Flash Overlay */
+        /* Flash Overlay */
         #flash-overlay {
             position: absolute;
             top: 0;
@@ -62,167 +72,186 @@
             transition: opacity 0.1s ease-out;
         }
 
-        /* UI Overlay */
-        .ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            font-size: 24px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            z-index: 10;
+        /* --- UI Elements Visibility Class --- */
+        .game-ui-element {
+            opacity: 0;
             pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+        .game-ui-element.active {
+            opacity: 1;
+            pointer-events: auto;
         }
 
-        /* Level Indicator Box */
-        .level-box {
-            background-color: #dcdcdc; /* Dunkleres Weiß / Hellgrau */
-            color: #000000;
-            width: 70px;  /* Kleiner */
-            height: 70px; /* Kleiner */
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 32px;
-            font-weight: 900;
-            box-shadow: 0 0 10px rgba(255,255,255,0.3);
-            border: 3px solid #fff;
+        /* Menu Button */
+        .menu-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+            backdrop-filter: blur(4px);
+            display: none; 
+        }
+        .menu-btn.active { display: block; opacity: 1; pointer-events: auto; }
+
+        /* Top Center Level Display */
+        .top-level-display {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            font-weight: normal;
+            letter-spacing: 3px;
+            color: rgba(255,255,255,0.6);
+            z-index: 10;
+            text-transform: uppercase;
         }
 
-        .timer-display { 
-            text-align: right; 
-            margin-top: 10px;
-        }
-        .timer-display span { color: var(--accent-red); }
-        .timer-display span.green-text { color: #00ff00; }
-
-        /* Status Text Container */
+        /* Status & Instructions Container */
         .status-container {
             position: absolute;
-            top: 18%;
+            top: 15%; 
             width: 100%;
             text-align: center;
             z-index: 10;
+            padding: 0 20px;
         }
 
         .status-text {
-            font-size: 28px;
+            font-size: 22px;
             font-weight: bold;
-            letter-spacing: 4px;
+            letter-spacing: 2px;
             text-transform: uppercase;
             color: #fff;
-            transition: all 0.5s ease;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
         }
 
-        /* Animation class for "Creating Sequence" (Color Cycle ONLY, Super Slow) */
-        .status-trip {
-            animation: colorCycle 4s infinite ease-in-out; 
+        .sub-status {
+            font-size: 14px;
+            color: var(--accent-green); 
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 0.3s;
+            text-shadow: 0 0 10px rgba(0, 255, 100, 0.3);
         }
-
-        /* Animation class for "Exam" (Static/Clean) */
-        .status-static {
-            animation: none;
-            text-shadow: 0 0 10px var(--accent-red);
-            color: var(--accent-red);
-            transform: scale(1.1);
-        }
+        .sub-status.visible { opacity: 1; }
         
-        /* Animation for Reading Phase (Calm White/Blue) */
-        .status-reading {
-            animation: none;
-            color: #00f0ff;
-            text-shadow: 0 0 15px #00f0ff;
-            transform: scale(1.0);
+        .sub-status.input-hint {
+            color: #ccc;
+            text-shadow: none;
+            font-size: 12px;
         }
 
-        /* New Animation: Just Colors, No Skew/Transform, Soft transitions */
+        /* Success Message */
+        .success-msg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            font-size: 24px;
+            color: var(--accent-green);
+            text-shadow: 0 0 15px rgba(0, 255, 100, 0.5);
+        }
+
+        /* Animations */
+        .status-trip { animation: colorCycle 4s infinite ease-in-out; }
+        .status-static { color: var(--accent-red); text-shadow: 0 0 10px var(--accent-red); }
+        .status-reading { color: #00f0ff; text-shadow: 0 0 10px #00f0ff; }
+
         @keyframes colorCycle {
             0% { color: #ff0000; text-shadow: 0 0 10px #00ffff; }
-            25% { color: #00ff00; text-shadow: 0 0 10px #ff00ff; }
             50% { color: #0000ff; text-shadow: 0 0 10px #ffff00; }
-            75% { color: #ffff00; text-shadow: 0 0 10px #0000ff; }
             100% { color: #ff00ff; text-shadow: 0 0 10px #00ff00; }
         }
 
         /* Main Game Box */
         .game-container {
             position: relative;
-            width: 200px;
-            height: 200px;
-            border: 2px solid var(--ui-color); /* Default White Border */
+            width: 180px;
+            height: 180px;
+            border: 2px solid var(--ui-color);
             display: flex;
             justify-content: center;
             align-items: center;
             background: rgba(0, 0, 0, 0.6); 
             backdrop-filter: blur(5px);
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-            transition: all 0.5s ease; /* Slower transition for phase changes */
+            transition: all 0.5s ease;
             z-index: 5;
+            margin-top: 20px;
         }
 
-        /* Exam Mode Box Style */
         .game-container.exam-mode {
             border-color: var(--accent-red);
             box-shadow: 0 0 30px rgba(255, 0, 60, 0.3);
-            background: rgba(50, 0, 10, 0.6); /* Slight red tint inside */
+            background: rgba(50, 0, 10, 0.6);
         }
 
-        /* The Arrow Display */
         .arrow-display {
             font-size: 80px;
             opacity: 0;
             transform: scale(0.8);
             transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        .arrow-display.active { opacity: 1; transform: scale(1.2); }
 
-        .arrow-display.active {
-            opacity: 1;
-            transform: scale(1.2);
-        }
-
-        /* Countdown Number above box */
+        /* Counter (X / X) */
         .counter-display {
             position: absolute;
-            top: -50px; /* Adjusted spacing */
+            top: -60px;
             width: 100%;
             text-align: center;
-            font-size: 16px; /* Etwas kleiner für den längeren Text */
-            font-weight: bold;
+            font-size: 32px; 
+            font-weight: 900;
             color: var(--ui-color);
             text-shadow: 0 0 10px #000;
-            transition: transform 0.2s;
             z-index: 10;
-            letter-spacing: 1px;
-            white-space: nowrap;
         }
         
-        /* Attempts display under box */
-        .attempts-display {
+        /* Time & Attempts Container under Box */
+        .info-under-box {
             position: absolute;
-            bottom: -50px; /* Positioned closer under box */
+            bottom: -80px; 
             width: 100%;
             text-align: center;
-            font-size: 18px; /* Größer */
-            font-weight: bold;
-            color: #fff;
-            letter-spacing: 1px;
-            text-shadow: 0 0 5px #000;
-            z-index: 10;
-            opacity: 0; /* Hidden by default */
-            transition: opacity 0.5s ease; /* Slower fade in */
-            white-space: nowrap; /* Ensure single line */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            pointer-events: none;
         }
 
-        .attempts-display.visible {
-            opacity: 1;
+        .timer-val {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-red);
+            text-shadow: 0 0 10px var(--accent-red);
+            opacity: 0;
+            transition: opacity 0.3s;
         }
+        .timer-val.visible { opacity: 1; }
+        .timer-val.green-text { color: #00ff00; text-shadow: 0 0 10px #00ff00; } 
+
+        .attempts-val {
+            font-size: 14px;
+            font-weight: bold;
+            color: #ccc;
+            letter-spacing: 1px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .attempts-val.visible { opacity: 1; }
+
 
         /* Laser Effects */
         .laser-h, .laser-v {
@@ -231,24 +260,10 @@
             opacity: 0;
             transition: opacity 0.1s;
         }
+        .laser-h { top: 50%; left: -100vw; width: 200vw; height: 2px; transform: translateY(-50%); }
+        .laser-v { left: 50%; top: -100vh; height: 200vh; width: 2px; transform: translateX(-50%); }
 
-        .laser-h {
-            top: 50%;
-            left: -100vw;
-            width: 200vw;
-            height: 2px;
-            transform: translateY(-50%);
-        }
-
-        .laser-v {
-            left: 50%;
-            top: -100vh;
-            height: 200vh;
-            width: 2px;
-            transform: translateX(-50%);
-        }
-
-        /* Dynamic Classes for Colors */
+        /* Colors */
         .glow-up { box-shadow: 0 0 50px var(--col-up), inset 0 0 20px var(--col-up); border-color: var(--col-up); }
         .glow-right { box-shadow: 0 0 50px var(--col-right), inset 0 0 20px var(--col-right); border-color: var(--col-right); }
         .glow-down { box-shadow: 0 0 50px var(--col-down), inset 0 0 20px var(--col-down); border-color: var(--col-down); }
@@ -259,161 +274,237 @@
         .txt-down { color: var(--col-down); text-shadow: 0 0 20px var(--col-down); }
         .txt-left { color: var(--col-left); text-shadow: 0 0 20px var(--col-left); }
 
-        /* Game Over / Start Screen Overlay */
-        .modal {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.95);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            transition: opacity 0.5s;
-        }
-        
-        .modal.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .modal h1 {
-            font-size: 60px;
-            margin: 0 0 20px 0;
-            text-transform: uppercase;
-            letter-spacing: 10px;
-            border-bottom: 4px solid var(--accent-red);
-        }
-
-        .modal p {
-            font-size: 18px;
-            max-width: 600px;
-            text-align: center;
-            line-height: 1.6;
-            color: #ccc;
-        }
-
-        .modal button {
-            margin-top: 40px;
-            background: transparent;
-            border: 2px solid var(--ui-color);
-            color: var(--ui-color);
-            padding: 15px 40px;
-            font-size: 18px;
-            font-family: inherit;
-            cursor: pointer;
-            text-transform: uppercase;
-            transition: all 0.3s;
-        }
-
-        .modal button:hover {
-            background: var(--ui-color);
-            color: var(--bg-color);
-        }
-
         /* Recall History */
         .recall-history {
             position: absolute;
-            bottom: -90px; /* Moved further down to make room for attempts */
+            bottom: -110px;
             width: 100%;
             display: flex;
             justify-content: center;
             gap: 10px;
             height: 30px;
         }
-
         .history-arrow {
-            color: #00ff00; /* Green for correct recall */
+            color: #00ff00;
             font-size: 24px;
             text-shadow: 0 0 10px #00ff00;
             animation: popIn 0.2s ease;
         }
+        @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
 
-        @keyframes popIn {
-            0% { transform: scale(0); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        /* Footer */
+        /* --- Footer (Affirmations) --- */
         .footer {
-            position: absolute;
+            position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
-            background-color: #000000; /* Black Background */
-            border-top: 2px solid #ffffff; /* White Line */
-            padding: 20px;
+            background-color: #000000;
+            border-top: 2px solid #ffffff;
+            padding: 20px 10px; 
             text-align: center;
             z-index: 60;
-            min-height: 80px;
+            min-height: 80px; 
             display: flex;
             align-items: center;
             justify-content: center;
             transition: opacity 0.5s ease;
-            opacity: 0; /* Hidden initially, shown during Reading/Exam */
+            opacity: 0;
         }
-
-        .footer.visible {
-            opacity: 1;
-        }
-
+        .footer.visible { opacity: 1; }
         .footer-text {
-            color: var(--accent-red); /* Red text */
-            font-family: 'Verdana', sans-serif; /* Nicer Font */
-            font-size: 22px;
+            color: var(--accent-red);
+            font-family: 'Verdana', sans-serif;
+            font-size: 24px;
             font-weight: normal;
             letter-spacing: 1px;
-            transition: opacity 0.5s ease;
-        }
-        
-        .footer-sparkle {
-            animation: sparklePulse 2s infinite;
+            line-height: 1.4;
         }
 
-        @keyframes sparklePulse {
-            0% { text-shadow: 0 0 5px var(--accent-red); }
-            50% { text-shadow: 0 0 15px #ff00ff; color: #fff; }
-            100% { text-shadow: 0 0 5px var(--accent-red); }
-        }
-
-        /* Mobile Controls */
+        /* --- Mobile Controls (Adaptive) --- */
         .mobile-controls {
-            display: none;
-            position: absolute;
-            bottom: 100px; /* Adjusted due to larger footer */
-            width: 100%;
-            height: 200px;
+            display: none; 
+            position: fixed;
             z-index: 50;
         }
 
+        .d-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 28px;
+            color: #fff;
+            backdrop-filter: blur(4px);
+            touch-action: manipulation;
+        }
+        .d-btn:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
+
         @media (hover: none) and (pointer: coarse) {
-            .mobile-controls {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                grid-template-rows: 1fr 1fr;
-                gap: 10px;
-                padding: 10px;
-                max-width: 400px;
-                margin: 0 auto;
+            @media (orientation: portrait) {
+                .mobile-controls {
+                    display: grid;
+                    bottom: 120px;
+                    width: 100%;
+                    justify-content: center;
+                    grid-template-columns: 80px 80px 80px;
+                    grid-template-rows: 80px 80px;
+                    gap: 5px;
+                }
+                .d-up { grid-column: 2; grid-row: 1; }
+                .d-left { grid-column: 1; grid-row: 2; }
+                .d-down { grid-column: 2; grid-row: 2; }
+                .d-right { grid-column: 3; grid-row: 2; }
             }
-            .d-btn {
-                background: rgba(255,255,255,0.1);
-                border: 1px solid rgba(255,255,255,0.2);
-                border-radius: 8px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                font-size: 24px;
-                color: #fff;
+
+            @media (orientation: landscape) {
+                .game-container { width: 140px; height: 140px; margin-top: 0; } 
+                .status-container { top: 8%; }
+                .footer-text { font-size: 20px; }
+                .mobile-controls {
+                    display: grid;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    grid-template-columns: 70px 70px 70px;
+                    grid-template-rows: 70px 70px;
+                    gap: 5px;
+                }
+                .d-up { grid-column: 2; grid-row: 1; }
+                .d-left { grid-column: 1; grid-row: 2; }
+                .d-down { grid-column: 2; grid-row: 2; }
+                .d-right { grid-column: 3; grid-row: 2; }
+                .controls-right { right: 20px; }
+                .controls-left { left: 20px; }
             }
-            .d-btn:active { background: rgba(255,255,255,0.3); }
-            .d-up { grid-column: 2; grid-row: 1; }
-            .d-left { grid-column: 1; grid-row: 2; }
-            .d-down { grid-column: 2; grid-row: 2; }
-            .d-right { grid-column: 3; grid-row: 2; }
+        }
+
+        /* --- Main Menu Overlay / Initial Screen --- */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 0.5s;
+            overflow-y: auto; /* Enable scrolling for menu */
+        }
+        .menu-overlay.hidden { opacity: 0; pointer-events: none; }
+        
+        .menu-overlay h1 { font-size: 60px; color: #fff; margin-bottom: 20px; border-bottom: 4px solid var(--accent-red); letter-spacing: 10px; }
+        .menu-overlay p { color: #ccc; text-align: center; line-height: 1.6; max-width: 600px; margin-bottom: 40px; font-size: 16px; padding: 0 20px; }
+        
+        .menu-btn-item {
+            background: transparent;
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 15px 40px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            width: 280px;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+        .menu-btn-item:hover { background: #fff; color: #000; }
+        
+        .toggle-container {
+            margin-top: 30px;
+            color: #aaa;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .epilepsy-warning {
+            margin-top: 40px;
+            color: #ff6600;
+            font-size: 12px;
+            max-width: 500px;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        /* --- Info Toggle Styles --- */
+        .info-section {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .info-toggle-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            width: 45%;
+            display: inline-block;
+        }
+        .info-toggle-btn:hover { background: rgba(255,255,255,0.2); }
+        
+        .info-content {
+            display: none;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #444;
+            padding: 20px;
+            margin-top: 10px;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ddd;
+        }
+        .info-content.open { display: block; }
+        
+        .info-content h3 { color: var(--accent-green); margin-top: 20px; margin-bottom: 10px; font-size: 18px; }
+        .info-content h3:first-child { margin-top: 0; }
+        .info-content ul { padding-left: 20px; }
+        .info-content li { margin-bottom: 5px; }
+        .info-content strong { color: #fff; }
+
+        /* Pause Menu Extras */
+        #pauseLevelInfo {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        #pauseQuote {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            color: var(--accent-red);
+            font-size: 16px;
+            letter-spacing: 1px;
+            font-style: italic;
+            left: 0; /* Ensure center */
+        }
+
+        /* Endgame Message */
+        .endgame-msg {
+            max-width: 700px;
+            color: #fff;
+            font-size: 22px;
+            line-height: 1.8;
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #fff;
+            background: rgba(0,0,0,0.8);
         }
 
     </style>
@@ -423,80 +514,183 @@
     <canvas id="starfield"></canvas>
     <div id="flash-overlay"></div>
 
-    <!-- Start / Game Over Modal -->
-    <div id="modal" class="modal">
-        <h1>ECHO</h1>
-        <p><strong>Steuerung:</strong> Nur mit den Pfeiltasten. Ganz simpel.<br><br>
-           1. <strong>Erstellen:</strong> Sequenz erstellen (3s Zeit).<br>
-           2. <strong>Lesen:</strong> Botschaft empfangen (4s).<br>
-           3. <strong>Prüfung:</strong> Sequenz abrufen.<br><br>
-           <em>Der Weltraum hört dich denken.</em></p>
-        <button id="startBtn">System Starten</button>
+    <!-- Top Right Pause Button -->
+    <button class="menu-btn game-ui-element" id="openMenuBtn"><i class="fa-solid fa-bars"></i></button>
+
+    <!-- Top Center Level Display -->
+    <div class="top-level-display game-ui-element">LEVEL <span id="levelNum">1</span></div>
+
+    <!-- Main Menu / Start Screen -->
+    <div id="mainMenu" class="menu-overlay">
+        <!-- Dynamic Content injected here -->
+        <div id="menuContainer" style="display:flex; flex-direction:column; align-items:center; width:100%;">
+            <h1>ECHO</h1>
+            
+            <!-- START MENU CONTENT -->
+            <div id="menuContent" style="display:flex; flex-direction:column; align-items:center;">
+                <p><strong>Steuerung:</strong> Nur Pfeiltasten.<br><br>
+                1. <strong>Erstellen:</strong> Sequenz eingeben.<br>
+                2. <strong>Lesen:</strong> Glaubenssatz verinnerlichen.<br>
+                3. <strong>Prüfung:</strong> Sequenz wiederholen.<br><br>
+                <em>Der Weltraum hört dich denken.</em></p>
+                <button class="menu-btn-item" id="startSystemBtn">System Starten</button>
+                
+                <div class="epilepsy-warning">
+                    ⚠️ WARNUNG: Dieses Spiel enthält blinkende Lichter und schnelle Farbwechsel (Stroboskop-Effekte). 
+                    Nicht geeignet für Personen mit photosensitiver Epilepsie.
+                </div>
+            </div>
+            
+            <!-- PAUSE MENU CONTENT -->
+            <div id="pauseContent" style="display:none; text-align:center; width: 100%;">
+                <h2 style="color:#fff; margin-bottom:20px; font-size:40px; border-bottom:2px solid #fff; display:inline-block;">PAUSE</h2>
+                <br>
+                <button class="menu-btn-item" id="resumeBtn">Fortsetzen</button>
+                <button class="menu-btn-item" id="restartBtn">Neustart</button>
+                <button class="menu-btn-item" id="exitBtn">Zur Startseite</button>
+                
+                <div id="pauseLevelInfo">AKTUELLES LEVEL: <span id="pauseLevelNum">1</span></div>
+
+                <!-- Info Section -->
+                <div class="info-section">
+                    <div>
+                        <button class="info-toggle-btn" id="btnInstructions">Spielanleitung</button>
+                        <button class="info-toggle-btn" id="btnWhyEcho">Wozu Echo?</button>
+                    </div>
+                    
+                    <div id="contentInstructions" class="info-content">
+                        <h3>Anleitung</h3>
+                        <p>1. <strong>Erstellen:</strong> Drücke eine beliebige Reihenfolge von Pfeiltasten. Merke sie dir gut.</p>
+                        <p>2. <strong>Lesen:</strong> Ein Glaubenssatz erscheint. Atme tief durch und ließ ihn.</p>
+                        <p>3. <strong>Prüfung:</strong> Wiederhole deine eingegebene Sequenz exakt. Du hast 10 Versuche.</p>
+                    </div>
+
+                    <div id="contentWhyEcho" class="info-content">
+                        <h3>⭐ Psychologischer Sinn des Spiels</h3>
+                        <p>Das „Echo“-Spiel ist mehr als ein Spiel. Es ist ein neuropsychologisches Trainingswerkzeug, das vier Bereiche gleichzeitig stimuliert:</p>
+
+                        <h3>1. Aufmerksamkeit & Fokussteuerung</h3>
+                        <p>Die Farben, Klänge und wiederkehrenden Muster aktivieren selektive Aufmerksamkeit — das gleiche System, das bei ADHS oft überlastet oder zerstreut ist.</p>
+                        <p><strong>Das Spiel trainiert:</strong></p>
+                        <ul>
+                            <li>schnelle Reizverarbeitung</li>
+                            <li>visuelle Fokussierung</li>
+                            <li>Reaktionsgeschwindigkeit</li>
+                            <li>kognitive Flexibilität</li>
+                        </ul>
+                        <p>Der Spieler lernt: <em>„Ich kann meine Aufmerksamkeit bewusst steuern.“</em></p>
+
+                        <h3>2. Positive Konditionierung (Pavlov-Effekt)</h3>
+                        <p>Dein Spiel nutzt Töne + Farben als Verstärker.</p>
+                        <ul>
+                            <li>Ein heller Ton + helle Farbe = Erfolg, Ruhe, Orientierung</li>
+                            <li>Ein tiefer Ton + dunkle Farbe = Vorsicht, Spannung, Fokus</li>
+                        </ul>
+                        <p>Das Gehirn beginnt unbewusst, diese Reize mit bestimmten Zuständen zu verknüpfen. Das schafft eine emotionale Struktur, die man später im Alltag wiedererkennt.</p>
+
+                        <h3>3. Mini-Dopamin-Loops</h3>
+                        <p>Bei ADHS und stressgeplagten Menschen fehlt oft Motivation und Belohnung. Das Spiel erzeugt kurze Dopamin-Impulse, die Ordnung ins Neuro-System bringen.</p>
+                        <p><strong>Gerade für ADHS wichtig:</strong> Du trainierst das Gehirn darauf, kurze Aufgaben zu beenden, statt sie zu vermeiden.</p>
+
+                        <h3>4. Unterbewusste Verankerung</h3>
+                        <p>Im Flow-Zustand sind Reizfilter offener. Neue, positive Glaubenssätze werden leichter akzeptiert.</p>
+
+                        <h3>⭐ Für wen ist das Spiel besonders gut?</h3>
+                        <ul>
+                            <li><strong>Menschen mit AD(H)S:</strong> Trainiert Fokus & Impulskontrolle.</li>
+                            <li><strong>Menschen mit Stress:</strong> Regelt das Nervensystem runter.</li>
+                            <li><strong>Menschen im Burnout-Risiko:</strong> Trainiert Kurzzeit-Regulation.</li>
+                            <li><strong>Kreative & Unternehmer:</strong> Polt das Gehirn auf „Fokus + Aktion“.</li>
+                        </ul>
+
+                        <h3>⭐ Kurz: Was bringt das Spiel wirklich?</h3>
+                        <p>Es ist ein neuropsychologisches Mini-Training für Fokus, Achtsamkeit, Handlungsbereitschaft und emotionale Balance. Und gleichzeitig ein Ritual für jeden, der klarer denken will.</p>
+                    </div>
+                </div>
+
+                <div id="pauseQuote">Bewahre deine Grenzen, hinterfrage sie trotzdem.</div>
+            </div>
+
+            <!-- Endgame Content (Hidden) -->
+            <div id="endGameContent" style="display:none; text-align:center;">
+                <div class="endgame-msg">
+                    Egal wie, Du warst neugierig und bist bis Level 99 gekommen. <br><br>
+                    Du möchtest ein Teil der Vision sein und Mitwirken? <br>
+                    Dann schreibe uns gerne und nenne das Wort <strong>echo99</strong>. <br><br>
+                    - Danke für deine Wertvolle Zeit.
+                </div>
+            </div>
+
+            <div class="toggle-container" id="handToggleContainer">
+                <span>Linkshänder Modus (Querformat):</span>
+                <input type="checkbox" id="leftHandToggle">
+            </div>
+        </div>
     </div>
 
-    <!-- UI Overlay -->
-    <div class="ui-layer">
-        <div class="level-box"><span id="levelDisplay">1</span></div>
-        <div class="timer-display"><span id="timerDisplay">--:--</span></div>
-    </div>
-
-    <div class="status-container">
-        <div class="status-text status-trip" id="statusText">BITTE EINE SEQUENZ ERSTELLEN</div>
+    <!-- Status & Info -->
+    <div class="status-container game-ui-element">
+        <div class="status-text status-trip" id="statusText">SYSTEM BEREIT</div>
+        <div class="sub-status" id="subStatus">GREIFE AUF DEINE ERINNERUNG ZU</div>
     </div>
 
     <!-- Center Game Area -->
-    <div class="game-container" id="gameBox">
-        <div class="counter-display" id="counterDisplay">KOMBINATION: 0 / 1</div>
+    <div class="game-container game-ui-element" id="gameBox">
+        <div class="counter-display" id="counterDisplay">0 / 4</div>
         <div class="arrow-display" id="arrowIcon">➔</div>
         
         <!-- Laser Elements -->
         <div class="laser-h" id="laserH"></div>
         <div class="laser-v" id="laserV"></div>
 
-        <!-- History Display for Recall Phase -->
-        <div class="recall-history" id="recallHistory"></div>
+        <!-- Timer & Attempts UNDER Box -->
+        <div class="info-under-box">
+            <div class="timer-val" id="timerValue">0.00</div>
+            <div class="attempts-val" id="attemptsDisplay">VERSUCHE: 10</div>
+        </div>
 
-        <!-- Attempts Display -->
-        <div class="attempts-display" id="attemptsDisplay"></div>
+        <!-- History Display -->
+        <div class="recall-history" id="recallHistory"></div>
     </div>
 
     <!-- Mobile Controls -->
-    <div class="mobile-controls">
-        <div class="d-btn d-up" data-key="ArrowUp">▲</div>
-        <div class="d-btn d-left" data-key="ArrowLeft">◀</div>
-        <div class="d-btn d-down" data-key="ArrowDown">▼</div>
-        <div class="d-btn d-right" data-key="ArrowRight">▶</div>
+    <div class="mobile-controls controls-right game-ui-element" id="mobileControls">
+        <div class="d-btn d-up" data-key="ArrowUp"><i class="fa-solid fa-caret-up"></i></div>
+        <div class="d-btn d-left" data-key="ArrowLeft"><i class="fa-solid fa-caret-left"></i></div>
+        <div class="d-btn d-down" data-key="ArrowDown"><i class="fa-solid fa-caret-down"></i></div>
+        <div class="d-btn d-right" data-key="ArrowRight"><i class="fa-solid fa-caret-right"></i></div>
     </div>
 
     <!-- Footer for Affirmations -->
-    <div class="footer" id="footer">
+    <div class="footer game-ui-element" id="footer">
         <div id="footerText" class="footer-text"></div>
     </div>
 
     <script>
         // --- Game Config & State ---
         const CONFIG = {
-            maxLevel: 500,
+            maxLevel: 99, 
             timePerKeyRecall: 6000, 
-            timePerKeyInput: 3000,
-            readingTime: 4000, // 4 seconds reading time
+            readingTime: 4000, 
             baseBpm: 60,
             maxAttempts: 10
         };
 
         const STATE = {
             level: 1,
-            phase: 'IDLE', // IDLE, INPUT, READING, READY_TO_RECALL, RECALLING, FAILED
+            phase: 'MENU', 
             sequence: [], 
             recallIndex: 0, 
             timer: null,
             attemptsLeft: 10,
             audioCtx: null,
             beatCount: 0,
-            musicRunning: false
+            musicRunning: false,
+            pausedPhase: null,
+            isLeftHanded: false,
+            gameStarted: false
         };
 
-        // Static Affirmations
         const AFFIRMATIONS = [
             "Mein Geist ist klar und kraftvoll.",
             "Meine Erinnerung wird jeden Tag stärker.",
@@ -512,20 +706,45 @@
 
         // --- DOM Elements ---
         const els = {
-            level: document.getElementById('levelDisplay'),
-            timer: document.getElementById('timerDisplay'),
+            levelNum: document.getElementById('levelNum'),
+            pauseLevelNum: document.getElementById('pauseLevelNum'),
             status: document.getElementById('statusText'),
+            subStatus: document.getElementById('subStatus'),
             box: document.getElementById('gameBox'),
             counter: document.getElementById('counterDisplay'),
             arrow: document.getElementById('arrowIcon'),
-            modal: document.getElementById('modal'),
-            startBtn: document.getElementById('startBtn'),
+            
+            // UI Groups
+            gameUiElements: document.querySelectorAll('.game-ui-element'),
+            
+            // Menu
+            openMenuBtn: document.getElementById('openMenuBtn'),
+            mainMenu: document.getElementById('mainMenu'),
+            menuContent: document.getElementById('menuContent'),
+            pauseContent: document.getElementById('pauseContent'),
+            endGameContent: document.getElementById('endGameContent'),
+            handToggleContainer: document.getElementById('handToggleContainer'),
+            startSystemBtn: document.getElementById('startSystemBtn'),
+            resumeBtn: document.getElementById('resumeBtn'),
+            restartBtn: document.getElementById('restartBtn'),
+            exitBtn: document.getElementById('exitBtn'),
+            leftHandToggle: document.getElementById('leftHandToggle'),
+            
+            // Info Toggles
+            btnInstructions: document.getElementById('btnInstructions'),
+            btnWhyEcho: document.getElementById('btnWhyEcho'),
+            contentInstructions: document.getElementById('contentInstructions'),
+            contentWhyEcho: document.getElementById('contentWhyEcho'),
+            
+            // Game Internals
             lasers: { h: document.getElementById('laserH'), v: document.getElementById('laserV') },
             history: document.getElementById('recallHistory'),
             attempts: document.getElementById('attemptsDisplay'),
+            timerDisplay: document.getElementById('timerValue'),
             flash: document.getElementById('flash-overlay'),
             footer: document.getElementById('footer'),
-            footerText: document.getElementById('footerText')
+            footerText: document.getElementById('footerText'),
+            mobileControls: document.getElementById('mobileControls')
         };
 
         const arrows = {
@@ -535,75 +754,12 @@
             'ArrowLeft': { char: '◀', class: 'glow-left', txt: 'txt-left', color: '#ffea00', freq: 261.63 }
         };
 
-        // --- Starfield Animation (Colorful) ---
-        const canvas = document.getElementById('starfield');
-        const ctx = canvas.getContext('2d');
-        let width, height;
-        let stars = [];
-
-        function resizeCanvas() {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            canvas.width = width;
-            canvas.height = height;
-            initStars();
-        }
-
-        function initStars() {
-            stars = [];
-            for(let i=0; i<400; i++) {
-                const h = Math.random() * 360;
-                stars.push({
-                    x: Math.random() * width - width/2,
-                    y: Math.random() * height - height/2,
-                    z: Math.random() * width,
-                    color: `hsl(${h}, 80%, 70%)`
-                });
-            }
-        }
-
-        function animateStars() {
-            ctx.fillStyle = "#050505";
-            ctx.fillRect(0, 0, width, height);
-            
-            const speed = 2 + (STATE.level * 0.1); 
-
-            for(let i=0; i<stars.length; i++) {
-                let s = stars[i];
-                s.z -= speed;
-                if(s.z <= 0) {
-                    s.x = Math.random() * width - width/2;
-                    s.y = Math.random() * height - height/2;
-                    s.z = width;
-                }
-
-                let k = 128.0 / s.z;
-                let px = s.x * k + width/2;
-                let py = s.y * k + height/2;
-                
-                if(px >= 0 && px <= width && py >= 0 && py <= height) {
-                    let size = (1 - s.z / width) * 3.5;
-                    ctx.fillStyle = s.color;
-                    ctx.beginPath();
-                    ctx.arc(px, py, size, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            }
-            requestAnimationFrame(animateStars);
-        }
-
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        animateStars();
-
         // --- Audio System ---
         function initAudio() {
             if (!STATE.audioCtx) {
                 STATE.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
-            if (STATE.audioCtx.state === 'suspended') {
-                STATE.audioCtx.resume();
-            }
+            if (STATE.audioCtx.state === 'suspended') STATE.audioCtx.resume();
             if (!STATE.musicRunning) {
                 STATE.musicRunning = true;
                 scheduleNextBeat();
@@ -611,60 +767,45 @@
         }
 
         function playOsc(freq, type, duration, vol = 0.1, detune = 0, time = 0) {
-            if (!STATE.audioCtx) return;
+            if (!STATE.audioCtx || STATE.phase === 'PAUSED' || STATE.phase === 'MENU') return;
             const t = time || STATE.audioCtx.currentTime;
             const osc = STATE.audioCtx.createOscillator();
             const gain = STATE.audioCtx.createGain();
             osc.type = type;
             osc.frequency.value = freq;
             osc.detune.value = detune;
-            
             osc.connect(gain);
             gain.connect(STATE.audioCtx.destination);
-            
             osc.start(t);
             gain.gain.setValueAtTime(vol, t);
             gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
             osc.stop(t + duration);
         }
 
-        function getLevelMusicParams(level) {
-            const root = 55 + (level % 12) * 5; 
-            const tempo = CONFIG.baseBpm + (level % 30); 
-            return { root, tempo };
-        }
-
         function scheduleNextBeat() {
             if (!STATE.musicRunning) return;
-
-            const params = getLevelMusicParams(STATE.level);
-            const beatDur = 60 / params.tempo;
+            const tempo = CONFIG.baseBpm + (STATE.level % 30);
+            const beatDur = 60 / tempo;
             
-            playMusicLayers(STATE.audioCtx.currentTime, beatDur, params);
+            if(STATE.phase !== 'PAUSED' && STATE.phase !== 'MENU') {
+                playMusicLayers(STATE.audioCtx.currentTime, beatDur, STATE.level);
+            }
 
             STATE.beatCount++;
-            setTimeout(() => {
-                scheduleNextBeat();
-            }, beatDur * 1000);
+            setTimeout(() => scheduleNextBeat(), beatDur * 1000);
         }
 
-        function playMusicLayers(time, duration, params) {
-            const oddBeat = STATE.beatCount % 2 !== 0;
+        function playMusicLayers(time, duration, level) {
+            const root = 55 + (level % 12) * 5;
             const barStart = STATE.beatCount % 4 === 0;
-
-            playOsc(params.root, 'triangle', 0.1, 0.4, -10, time);
-
-            if (barStart) {
-                playOsc(params.root / 2, 'sawtooth', duration * 4, 0.1, 0, time);
-            }
-
-            if (oddBeat) {
-                playOsc(8000, 'square', 0.05, 0.05, 0, time);
-            }
-
+            
+            playOsc(root, 'triangle', 0.1, 0.4, -10, time); // Kick
+            if (barStart) playOsc(root / 2, 'sawtooth', duration * 4, 0.1, 0, time); // Bass
+            if (STATE.beatCount % 2 !== 0) playOsc(8000, 'square', 0.05, 0.05, 0, time); // Hat
+            
             if (Math.random() > 0.4) {
                 const scale = [1, 1.25, 1.5, 1.33, 2];
-                const note = params.root * 2 * scale[Math.floor(Math.random()*scale.length)];
+                const note = root * 2 * scale[Math.floor(Math.random()*scale.length)];
                 playOsc(note, 'sine', 0.2, 0.1, 0, time + (duration/2));
             }
         }
@@ -675,14 +816,11 @@
             const t = STATE.audioCtx.currentTime;
             const osc = STATE.audioCtx.createOscillator();
             const gain = STATE.audioCtx.createGain();
-            
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(freq, t);
             osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + 0.3);
-            
             gain.gain.setValueAtTime(0.15, t);
             gain.gain.linearRampToValueAtTime(0, t + 0.3);
-            
             osc.connect(gain);
             gain.connect(STATE.audioCtx.destination);
             osc.start();
@@ -696,11 +834,11 @@
             playOsc(75, 'sawtooth', 0.5, 0.3, 0, t);
         }
 
-        function triggerFlash() {
-            els.flash.style.opacity = '1';
-            setTimeout(() => {
-                els.flash.style.opacity = '0';
-            }, 100);
+        // --- Visual Effects & Starfield ---
+        function triggerFlash(color = 'white') {
+            els.flash.style.backgroundColor = color;
+            els.flash.style.opacity = '0.5'; // Less intense
+            setTimeout(() => { els.flash.style.opacity = '0'; }, 100);
         }
 
         function triggerVisuals(key) {
@@ -724,18 +862,158 @@
                 } else {
                      els.box.className = 'game-container';
                 }
-                
                 els.arrow.classList.remove('active');
                 els.lasers.h.style.opacity = '0';
                 els.lasers.v.style.opacity = '0';
             }, 150);
         }
 
-        // --- Core Logic ---
+        // --- Starfield Improvement (Slower, Nebulous) ---
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let stars = [];
+
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStars();
+        }
+
+        function initStars() {
+            stars = [];
+            for(let i=0; i<600; i++) {
+                const h = Math.random() * 360;
+                stars.push({
+                    x: Math.random() * width - width/2,
+                    y: Math.random() * height - height/2,
+                    z: Math.random() * width,
+                    color: `hsl(${h}, 70%, 80%)`,
+                    sizeMult: Math.random() * 1.5 // Varies size slightly
+                });
+            }
+        }
+
+        function animateStars() {
+            // Very light opacity for trail creates "nebula/blur" effect
+            ctx.fillStyle = "rgba(5, 5, 5, 0.3)"; 
+            ctx.fillRect(0, 0, width, height);
+            
+            // Much slower speed
+            const speed = 0.5 + (STATE.level * 0.05); 
+
+            for(let i=0; i<stars.length; i++) {
+                let s = stars[i];
+                s.z -= speed;
+                if(s.z <= 0) {
+                    s.x = Math.random() * width - width/2;
+                    s.y = Math.random() * height - height/2;
+                    s.z = width;
+                }
+
+                let k = 128.0 / s.z;
+                let px = s.x * k + width/2;
+                let py = s.y * k + height/2;
+                
+                if(px >= 0 && px <= width && py >= 0 && py <= height) {
+                    let size = (1 - s.z / width) * 3.0 * s.sizeMult;
+                    // Faint soft circles
+                    ctx.beginPath();
+                    ctx.arc(px, py, size, 0, Math.PI*2);
+                    ctx.fillStyle = s.color;
+                    ctx.fill();
+                }
+            }
+            requestAnimationFrame(animateStars);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        animateStars();
+
+
+        // --- Menu Logic ---
+        function openPauseMenu() {
+            if (STATE.phase === 'IDLE' || STATE.phase === 'SUCCESS_ANIM' || STATE.phase === 'FAILED') return;
+            
+            STATE.pausedPhase = STATE.phase;
+            STATE.phase = 'PAUSED';
+            stopTimers();
+            
+            els.menuContent.style.display = 'none';
+            els.endGameContent.style.display = 'none';
+            els.pauseContent.style.display = 'block';
+            
+            // Update Pause Info
+            els.pauseLevelNum.innerText = STATE.level;
+            
+            els.mainMenu.classList.remove('hidden');
+        }
+
+        function closePauseMenu() {
+            els.mainMenu.classList.add('hidden');
+            STATE.phase = STATE.pausedPhase;
+            // No input timer resume needed
+            if(STATE.phase === 'RECALLING') startRecallTimer();
+        }
+
+        els.openMenuBtn.addEventListener('click', openPauseMenu);
+        els.resumeBtn.addEventListener('click', closePauseMenu);
+        
+        els.restartBtn.addEventListener('click', () => {
+            els.mainMenu.classList.add('hidden');
+            resetLevel(1, true);
+        });
+
+        // Exit Button - Back to Start Screen
+        els.exitBtn.addEventListener('click', () => {
+            STATE.phase = 'MENU';
+            stopTimers();
+            // Reset UI
+            els.gameUiElements.forEach(el => el.classList.remove('active'));
+            // Show Start Menu
+            els.pauseContent.style.display = 'none';
+            els.menuContent.style.display = 'flex';
+            // Hide info sections
+            els.contentInstructions.classList.remove('open');
+            els.contentWhyEcho.classList.remove('open');
+        });
+
+        els.startSystemBtn.addEventListener('click', () => {
+            STATE.gameStarted = true;
+            els.mainMenu.classList.add('hidden');
+            startGame();
+        });
+
+        els.leftHandToggle.addEventListener('change', (e) => {
+            STATE.isLeftHanded = e.target.checked;
+            if (STATE.isLeftHanded) {
+                els.mobileControls.classList.remove('controls-right');
+                els.mobileControls.classList.add('controls-left');
+            } else {
+                els.mobileControls.classList.remove('controls-left');
+                els.mobileControls.classList.add('controls-right');
+            }
+        });
+
+        // Info Toggles
+        els.btnInstructions.addEventListener('click', () => {
+            els.contentWhyEcho.classList.remove('open');
+            els.contentInstructions.classList.toggle('open');
+        });
+        
+        els.btnWhyEcho.addEventListener('click', () => {
+            els.contentInstructions.classList.remove('open');
+            els.contentWhyEcho.classList.toggle('open');
+        });
+
+        // --- Core Game Logic ---
 
         function startGame() {
-            els.modal.classList.add('hidden');
             initAudio();
+            // Show Game UI
+            els.gameUiElements.forEach(el => el.classList.add('active'));
             resetLevel(1, true); 
         }
 
@@ -750,47 +1028,51 @@
                 STATE.attemptsLeft = CONFIG.maxAttempts;
             }
 
+            // Visual Reset
             els.history.innerHTML = '';
-            
-            // Hide footer initially in new level
             els.footer.classList.remove('visible');
-            els.footerText.innerText = "";
-            els.footerText.classList.remove('footer-sparkle');
-            
-            // Reset Box Style
             els.box.classList.remove('exam-mode');
             els.attempts.classList.remove('visible');
+            els.timerDisplay.classList.remove('visible');
+            els.subStatus.classList.remove('visible'); // Hide exam sub status
 
             updateUI();
             
-            // Set text for Input Phase
-            els.status.innerText = "BITTE EINE SEQUENZ ERSTELLEN";
+            // Input Phase
+            const targetLength = STATE.level + 3; 
+            
+            els.status.innerText = `ERSTELLE ${targetLength} KOMBINATIONEN`;
             els.status.className = "status-text status-trip"; 
             
-            els.timer.innerText = "--:--";
+            // Show input instruction with custom class
+            els.subStatus.innerText = `DRÜCKE JETZT ${targetLength} BELIEBIGE PFEILTASTEN UND MERKE DIR ES.`;
+            els.subStatus.className = "sub-status visible input-hint"; 
         }
 
         function updateUI() {
-            els.level.innerText = STATE.level;
+            els.levelNum.innerText = STATE.level;
             els.attempts.innerText = `VERSUCHE: ${STATE.attemptsLeft} / ${CONFIG.maxAttempts}`;
             
             let current = 0;
+            // Target length calculation: Level 1 = 4 (1+3), Level 2 = 5 (2+3), etc.
+            let target = STATE.level + 3;
+            
             if (STATE.phase === 'INPUT') {
                 current = STATE.sequence.length;
             } else if (STATE.phase === 'READING') {
-                current = STATE.sequence.length; // Show full count during reading
+                current = STATE.sequence.length; 
+            } else if (STATE.phase === 'SUCCESS_ANIM') {
+                current = target;
             } else {
                 current = STATE.recallIndex;
             }
             
-            els.counter.innerText = `KOMBINATION: ${current} / ${STATE.level}`;
+            els.counter.innerText = `${current} / ${target}`;
         }
 
         function handleInput(key) {
             if (!arrows[key]) return;
-            
-            // Block input during READING or FAILED phases
-            if (STATE.phase === 'READING' || STATE.phase === 'FAILED') return;
+            if (STATE.phase === 'READING' || STATE.phase === 'FAILED' || STATE.phase === 'PAUSED' || STATE.phase === 'SUCCESS_ANIM' || STATE.phase === 'MENU') return;
 
             triggerVisuals(key);
             playKeySound(key); 
@@ -798,10 +1080,10 @@
             if (STATE.phase === 'INPUT') {
                 STATE.sequence.push(key);
                 updateUI();
-                startInputTimer();
-                if (STATE.sequence.length >= STATE.level) {
-                    stopTimers();
-                    startReadingPhase(); // Go to Reading phase first
+                
+                const targetLength = STATE.level + 3;
+                if (STATE.sequence.length >= targetLength) {
+                    startReadingPhase(); 
                 }
             }
             else if (STATE.phase === 'READY_TO_RECALL' || STATE.phase === 'RECALLING') {
@@ -815,44 +1097,49 @@
             }
         }
 
-        // --- NEW: Reading Phase ---
+        // --- Phase 2: Reading ---
         function startReadingPhase() {
             STATE.phase = 'READING';
             
-            // Show Wisdom
+            // Hide input hint
+            els.subStatus.classList.remove('visible');
+            
             const affirmationIndex = (STATE.level - 1) % AFFIRMATIONS.length;
             els.footerText.innerText = AFFIRMATIONS[affirmationIndex];
-            els.footerText.classList.remove('footer-sparkle');
             els.footer.classList.add('visible');
 
-            // Status Update
-            els.status.innerText = "BOTSCHAFT EMPFANGEN...";
+            els.status.innerText = "▼ LESE DEINEN GLAUBENSSATZ... ▼";
             els.status.className = "status-text status-reading";
             
-            // Timer visual for reading (optional, just static text here)
-            els.timer.innerText = "LESEN...";
-
-            // Wait 4 seconds then start exam
             setTimeout(() => {
+                if(STATE.phase === 'PAUSED') return; 
                 startRecallPhase();
             }, CONFIG.readingTime);
         }
 
+        // --- Phase 3: Exam ---
         function startRecallPhase() {
             STATE.phase = 'READY_TO_RECALL';
             STATE.recallIndex = 0;
             els.history.innerHTML = ''; 
             
-            // Exam Visuals
+            // Visuals
             els.box.classList.add('exam-mode');
             els.attempts.classList.add('visible');
+            els.timerDisplay.classList.add('visible');
+            
+            // Restore green exam sub-status
+            els.subStatus.innerText = "GREIFE AUF DEINE ERINNERUNG ZU";
+            els.subStatus.className = "sub-status visible"; 
 
-            // Set Text for Exam Phase
+            // Text
             els.status.innerText = "PRÜFUNG";
             els.status.className = "status-text status-static"; 
             
+            // Timer Reset Text (GREEN)
+            els.timerDisplay.innerHTML = "<span class='green-text'>BEREIT</span>";
+            
             updateUI();
-            els.timer.innerHTML = "<span class='green-text'>BEREIT</span>";
         }
 
         function checkRecall(key) {
@@ -868,48 +1155,69 @@
 
                 updateUI();
 
-                if (STATE.recallIndex >= STATE.level) {
-                    levelUp();
+                const targetLength = STATE.level + 3;
+                if (STATE.recallIndex >= targetLength) {
+                    levelSuccess();
                 }
             } else {
                 failLevel();
             }
         }
 
+        function levelSuccess() {
+            stopTimers();
+            STATE.phase = 'SUCCESS_ANIM';
+            
+            // Visuals
+            els.status.className = "status-text"; 
+            els.status.innerHTML = `<div class="success-msg">SYNAPSEN VERSTÄRKT <i class="fa-solid fa-check"></i></div>`;
+            els.subStatus.classList.remove('visible');
+            
+            triggerFlash('white');
+
+            // Wait 4 seconds then Level Up or END GAME
+            setTimeout(() => {
+                if (STATE.level < CONFIG.maxLevel) {
+                    resetLevel(STATE.level + 1, true); 
+                } else {
+                    showEndGame();
+                }
+            }, 4000);
+        }
+
+        function showEndGame() {
+            STATE.phase = 'MENU'; // Stop inputs
+            stopTimers();
+            
+            els.menuContent.style.display = 'none';
+            els.pauseContent.style.display = 'none';
+            els.handToggleContainer.style.display = 'none';
+            els.endGameContent.style.display = 'block';
+            
+            els.mainMenu.classList.remove('hidden');
+        }
+
         // --- Timers ---
         let activeTimerInterval;
         let activeDeadline;
-
-        function startInputTimer() {
-            if (activeTimerInterval) clearInterval(activeTimerInterval);
-            activeDeadline = Date.now() + CONFIG.timePerKeyInput;
-            
-            activeTimerInterval = setInterval(() => {
-                const now = Date.now();
-                const left = activeDeadline - now;
-                if (left <= 0) {
-                    clearInterval(activeTimerInterval);
-                    els.timer.innerText = "0.00";
-                    resetLevel(STATE.level, true); 
-                } else {
-                    els.timer.innerText = (left / 1000).toFixed(2);
-                }
-            }, 10);
-        }
 
         function startRecallTimer() {
             activeDeadline = Date.now() + CONFIG.timePerKeyRecall;
             if (activeTimerInterval) clearInterval(activeTimerInterval);
             
             activeTimerInterval = setInterval(() => {
+                if (STATE.phase === 'PAUSED') { 
+                    activeDeadline += 10; return; 
+                }
                 const now = Date.now();
                 const left = activeDeadline - now;
+                
                 if (left <= 0) {
                     clearInterval(activeTimerInterval);
-                    els.timer.innerText = "0.00";
+                    els.timerDisplay.innerText = "0.00";
                     failLevel(); 
                 } else {
-                    els.timer.innerText = (left / 1000).toFixed(2);
+                    els.timerDisplay.innerText = (left / 1000).toFixed(2);
                 }
             }, 10);
         }
@@ -917,28 +1225,9 @@
         function resetRecallTimer() { startRecallTimer(); }
         function stopTimers() {
             if (activeTimerInterval) clearInterval(activeTimerInterval);
-            els.timer.innerText = "--:--";
         }
 
-        function levelUp() {
-            stopTimers();
-            triggerFlash(); 
-            STATE.phase = 'IDLE';
-            
-            // Reset visuals
-            els.box.classList.remove('exam-mode');
-            els.attempts.classList.remove('visible');
-            els.footer.classList.remove('visible'); // Hide footer on level up
-
-            setTimeout(() => {
-                if (STATE.level < CONFIG.maxLevel) {
-                    resetLevel(STATE.level + 1, true); 
-                } else {
-                    alert("ULTIMATE MEMORY REACHED");
-                }
-            }, 500);
-        }
-
+        // --- Failure Logic ---
         function failLevel() {
             stopTimers();
             playErrorSound();
@@ -946,6 +1235,9 @@
             
             STATE.attemptsLeft--;
             updateUI();
+
+            // RED FLASH
+            triggerFlash('red');
 
             els.box.style.borderColor = "var(--accent-red)";
             els.box.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
@@ -955,25 +1247,19 @@
                 els.box.style.backgroundColor = "";
                 
                 if (STATE.attemptsLeft > 0) {
-                    els.status.innerText = "VERSUCH " + (CONFIG.maxAttempts - STATE.attemptsLeft) + " GESCHEITERT";
-                    setTimeout(() => {
-                        startRecallPhase(); 
-                    }, 1000);
+                    els.status.innerText = "VERSUCH FEHLGESCHLAGEN";
+                    setTimeout(() => { startRecallPhase(); }, 1000);
                 } else {
                     els.status.innerText = "ABSTIEG";
-                    
                     setTimeout(() => {
-                        if (STATE.level > 1) {
-                            resetLevel(STATE.level - 1, true); 
-                        } else {
-                            resetLevel(1, true);
-                        }
+                        if (STATE.level > 1) { resetLevel(STATE.level - 1, true); } 
+                        else { resetLevel(1, true); }
                     }, 2000); 
                 }
-
             }, 200);
         }
 
+        // --- Inputs ---
         document.addEventListener('keydown', (e) => {
             if (arrows[e.code]) {
                 e.preventDefault();
@@ -981,14 +1267,19 @@
             }
         });
 
-        document.querySelector('.mobile-controls').addEventListener('touchstart', (e) => {
-            if (e.target.dataset.key) {
+        // Use 'mousedown'/'touchstart' for better response
+        const handleTouch = (e) => {
+            const key = e.currentTarget.dataset.key;
+            if (key) {
                 e.preventDefault();
-                handleInput(e.target.dataset.key);
+                handleInput(key);
             }
+        };
+
+        document.querySelectorAll('.d-btn').forEach(btn => {
+            btn.addEventListener('touchstart', handleTouch, {passive: false});
+            btn.addEventListener('mousedown', handleTouch);
         });
-        
-        if(els.startBtn) els.startBtn.onclick = startGame;
 
     </script>
 </body>
