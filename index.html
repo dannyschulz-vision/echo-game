@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECHO - Das Erinnerungsspiel</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --ui-color: #ffffff;
+            --accent-red: #ff003c;
+            --glass: rgba(255, 255, 255, 0.1);
+            
+            /* Arrow Colors */
+            --col-up: #ff003c;   /* Rot */
+            --col-right: #00f0ff; /* Cyan/Modern */
+            --col-down: #ffffff; /* Weiß */
+            --col-left: #ffea00; /* Gelb */
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--ui-color);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.1s ease;
+        }
+
+        /* Starfield Canvas Background */
+        #starfield {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* Level Flash Overlay */
+        #flash-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 200;
+            transition: opacity 0.1s ease-out;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Level Indicator Box */
+        .level-box {
+            background-color: #dcdcdc; /* Dunkleres Weiß / Hellgrau */
+            color: #000000;
+            width: 70px;  /* Kleiner */
+            height: 70px; /* Kleiner */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            font-weight: 900;
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+            border: 3px solid #fff;
+        }
+
+        .timer-display { 
+            text-align: right; 
+            margin-top: 10px;
+        }
+        .timer-display span { color: var(--accent-red); }
+        .timer-display span.green-text { color: #00ff00; }
+
+        /* Status Text Container */
+        .status-container {
+            position: absolute;
+            top: 18%;
+            width: 100%;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .status-text {
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: #fff;
+            transition: all 0.5s ease;
+        }
+
+        /* Animation class for "Creating Sequence" (Color Cycle ONLY, Super Slow) */
+        .status-trip {
+            animation: colorCycle 4s infinite ease-in-out; 
+        }
+
+        /* Animation class for "Exam" (Static/Clean) */
+        .status-static {
+            animation: none;
+            text-shadow: 0 0 10px var(--accent-red);
+            color: var(--accent-red);
+            transform: scale(1.1);
+        }
+        
+        /* Animation for Reading Phase (Calm White/Blue) */
+        .status-reading {
+            animation: none;
+            color: #00f0ff;
+            text-shadow: 0 0 15px #00f0ff;
+            transform: scale(1.0);
+        }
+
+        /* New Animation: Just Colors, No Skew/Transform, Soft transitions */
+        @keyframes colorCycle {
+            0% { color: #ff0000; text-shadow: 0 0 10px #00ffff; }
+            25% { color: #00ff00; text-shadow: 0 0 10px #ff00ff; }
+            50% { color: #0000ff; text-shadow: 0 0 10px #ffff00; }
+            75% { color: #ffff00; text-shadow: 0 0 10px #0000ff; }
+            100% { color: #ff00ff; text-shadow: 0 0 10px #00ff00; }
+        }
+
+        /* Main Game Box */
+        .game-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            border: 2px solid var(--ui-color); /* Default White Border */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6); 
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            transition: all 0.5s ease; /* Slower transition for phase changes */
+            z-index: 5;
+        }
+
+        /* Exam Mode Box Style */
+        .game-container.exam-mode {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 30px rgba(255, 0, 60, 0.3);
+            background: rgba(50, 0, 10, 0.6); /* Slight red tint inside */
+        }
+
+        /* The Arrow Display */
+        .arrow-display {
+            font-size: 80px;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .arrow-display.active {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+        /* Countdown Number above box */
+        .counter-display {
+            position: absolute;
+            top: -50px; /* Adjusted spacing */
+            width: 100%;
+            text-align: center;
+            font-size: 16px; /* Etwas kleiner für den längeren Text */
+            font-weight: bold;
+            color: var(--ui-color);
+            text-shadow: 0 0 10px #000;
+            transition: transform 0.2s;
+            z-index: 10;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        
+        /* Attempts display under box */
+        .attempts-display {
+            position: absolute;
+            bottom: -50px; /* Positioned closer under box */
+            width: 100%;
+            text-align: center;
+            font-size: 18px; /* Größer */
+            font-weight: bold;
+            color: #fff;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px #000;
+            z-index: 10;
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.5s ease; /* Slower fade in */
+            white-space: nowrap; /* Ensure single line */
+        }
+
+        .attempts-display.visible {
+            opacity: 1;
+        }
+
+        /* Laser Effects */
+        .laser-h, .laser-v {
+            position: absolute;
+            background: var(--ui-color);
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .laser-h {
+            top: 50%;
+            left: -100vw;
+            width: 200vw;
+            height: 2px;
+            transform: translateY(-50%);
+        }
+
+        .laser-v {
+            left: 50%;
+            top: -100vh;
+            height: 200vh;
+            width: 2px;
+            transform: translateX(-50%);
+        }
+
+        /* Dynamic Classes for Colors */
+        .glow-up { box-shadow: 0 0 50px var(--col-up), inset 0 0 20px var(--col-up); border-color: var(--col-up); }
+        .glow-right { box-shadow: 0 0 50px var(--col-right), inset 0 0 20px var(--col-right); border-color: var(--col-right); }
+        .glow-down { box-shadow: 0 0 50px var(--col-down), inset 0 0 20px var(--col-down); border-color: var(--col-down); }
+        .glow-left { box-shadow: 0 0 50px var(--col-left), inset 0 0 20px var(--col-left); border-color: var(--col-left); }
+        
+        .txt-up { color: var(--col-up); text-shadow: 0 0 20px var(--col-up); }
+        .txt-right { color: var(--col-right); text-shadow: 0 0 20px var(--col-right); }
+        .txt-down { color: var(--col-down); text-shadow: 0 0 20px var(--col-down); }
+        .txt-left { color: var(--col-left); text-shadow: 0 0 20px var(--col-left); }
+
+        /* Game Over / Start Screen Overlay */
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
+        
+        .modal.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .modal h1 {
+            font-size: 60px;
+            margin: 0 0 20px 0;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            border-bottom: 4px solid var(--accent-red);
+        }
+
+        .modal p {
+            font-size: 18px;
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .modal button {
+            margin-top: 40px;
+            background: transparent;
+            border: 2px solid var(--ui-color);
+            color: var(--ui-color);
+            padding: 15px 40px;
+            font-size: 18px;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+
+        .modal button:hover {
+            background: var(--ui-color);
+            color: var(--bg-color);
+        }
+
+        /* Recall History */
+        .recall-history {
+            position: absolute;
+            bottom: -90px; /* Moved further down to make room for attempts */
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            height: 30px;
+        }
+
+        .history-arrow {
+            color: #00ff00; /* Green for correct recall */
+            font-size: 24px;
+            text-shadow: 0 0 10px #00ff00;
+            animation: popIn 0.2s ease;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Footer */
+        .footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #000000; /* Black Background */
+            border-top: 2px solid #ffffff; /* White Line */
+            padding: 20px;
+            text-align: center;
+            z-index: 60;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+            opacity: 0; /* Hidden initially, shown during Reading/Exam */
+        }
+
+        .footer.visible {
+            opacity: 1;
+        }
+
+        .footer-text {
+            color: var(--accent-red); /* Red text */
+            font-family: 'Verdana', sans-serif; /* Nicer Font */
+            font-size: 22px;
+            font-weight: normal;
+            letter-spacing: 1px;
+            transition: opacity 0.5s ease;
+        }
+        
+        .footer-sparkle {
+            animation: sparklePulse 2s infinite;
+        }
+
+        @keyframes sparklePulse {
+            0% { text-shadow: 0 0 5px var(--accent-red); }
+            50% { text-shadow: 0 0 15px #ff00ff; color: #fff; }
+            100% { text-shadow: 0 0 5px var(--accent-red); }
+        }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 100px; /* Adjusted due to larger footer */
+            width: 100%;
+            height: 200px;
+            z-index: 50;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .mobile-controls {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-rows: 1fr 1fr;
+                gap: 10px;
+                padding: 10px;
+                max-width: 400px;
+                margin: 0 auto;
+            }
+            .d-btn {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 24px;
+                color: #fff;
+            }
+            .d-btn:active { background: rgba(255,255,255,0.3); }
+            .d-up { grid-column: 2; grid-row: 1; }
+            .d-left { grid-column: 1; grid-row: 2; }
+            .d-down { grid-column: 2; grid-row: 2; }
+            .d-right { grid-column: 3; grid-row: 2; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="starfield"></canvas>
+    <div id="flash-overlay"></div>
+
+    <!-- Start / Game Over Modal -->
+    <div id="modal" class="modal">
+        <h1>ECHO</h1>
+        <p><strong>Steuerung:</strong> Nur mit den Pfeiltasten. Ganz simpel.<br><br>
+           1. <strong>Erstellen:</strong> Sequenz erstellen (3s Zeit).<br>
+           2. <strong>Lesen:</strong> Botschaft empfangen (4s).<br>
+           3. <strong>Prüfung:</strong> Sequenz abrufen.<br><br>
+           <em>Der Weltraum hört dich denken.</em></p>
+        <button id="startBtn">System Starten</button>
+    </div>
+
+    <!-- UI Overlay -->
+    <div class="ui-layer">
+        <div class="level-box"><span id="levelDisplay">1</span></div>
+        <div class="timer-display"><span id="timerDisplay">--:--</span></div>
+    </div>
+
+    <div class="status-container">
+        <div class="status-text status-trip" id="statusText">BITTE EINE SEQUENZ ERSTELLEN</div>
+    </div>
+
+    <!-- Center Game Area -->
+    <div class="game-container" id="gameBox">
+        <div class="counter-display" id="counterDisplay">KOMBINATION: 0 / 1</div>
+        <div class="arrow-display" id="arrowIcon">➔</div>
+        
+        <!-- Laser Elements -->
+        <div class="laser-h" id="laserH"></div>
+        <div class="laser-v" id="laserV"></div>
+
+        <!-- History Display for Recall Phase -->
+        <div class="recall-history" id="recallHistory"></div>
+
+        <!-- Attempts Display -->
+        <div class="attempts-display" id="attemptsDisplay"></div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls">
+        <div class="d-btn d-up" data-key="ArrowUp">▲</div>
+        <div class="d-btn d-left" data-key="ArrowLeft">◀</div>
+        <div class="d-btn d-down" data-key="ArrowDown">▼</div>
+        <div class="d-btn d-right" data-key="ArrowRight">▶</div>
+    </div>
+
+    <!-- Footer for Affirmations -->
+    <div class="footer" id="footer">
+        <div id="footerText" class="footer-text"></div>
+    </div>
+
+    <script>
+        // --- Game Config & State ---
+        const CONFIG = {
+            maxLevel: 500,
+            timePerKeyRecall: 6000, 
+            timePerKeyInput: 3000,
+            readingTime: 4000, // 4 seconds reading time
+            baseBpm: 60,
+            maxAttempts: 10
+        };
+
+        const STATE = {
+            level: 1,
+            phase: 'IDLE', // IDLE, INPUT, READING, READY_TO_RECALL, RECALLING, FAILED
+            sequence: [], 
+            recallIndex: 0, 
+            timer: null,
+            attemptsLeft: 10,
+            audioCtx: null,
+            beatCount: 0,
+            musicRunning: false
+        };
+
+        // Static Affirmations
+        const AFFIRMATIONS = [
+            "Mein Geist ist klar und kraftvoll.",
+            "Meine Erinnerung wird jeden Tag stärker.",
+            "Ich vertraue meinem inneren Wissen.",
+            "Mein Unterbewusstsein arbeitet für mich.",
+            "Ich bin kreativ und offen für neue Ideen.",
+            "Mein Bewusstsein wächst in Ruhe und Klarheit.",
+            "Entspannung stärkt mein Denken.",
+            "Ich merke mir, was für mich wichtig ist.",
+            "Mein Gehirn lernt leicht und natürlich.",
+            "Ich fühle mentale Stärke in mir."
+        ];
+
+        // --- DOM Elements ---
+        const els = {
+            level: document.getElementById('levelDisplay'),
+            timer: document.getElementById('timerDisplay'),
+            status: document.getElementById('statusText'),
+            box: document.getElementById('gameBox'),
+            counter: document.getElementById('counterDisplay'),
+            arrow: document.getElementById('arrowIcon'),
+            modal: document.getElementById('modal'),
+            startBtn: document.getElementById('startBtn'),
+            lasers: { h: document.getElementById('laserH'), v: document.getElementById('laserV') },
+            history: document.getElementById('recallHistory'),
+            attempts: document.getElementById('attemptsDisplay'),
+            flash: document.getElementById('flash-overlay'),
+            footer: document.getElementById('footer'),
+            footerText: document.getElementById('footerText')
+        };
+
+        const arrows = {
+            'ArrowUp': { char: '▲', class: 'glow-up', txt: 'txt-up', color: '#ff003c', freq: 440 },
+            'ArrowRight': { char: '▶', class: 'glow-right', txt: 'txt-right', color: '#00f0ff', freq: 329.63 },
+            'ArrowDown': { char: '▼', class: 'glow-down', txt: 'txt-down', color: '#ffffff', freq: 220 },
+            'ArrowLeft': { char: '◀', class: 'glow-left', txt: 'txt-left', color: '#ffea00', freq: 261.63 }
+        };
+
+        // --- Starfield Animation (Colorful) ---
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let stars = [];
+
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStars();
+        }
+
+        function initStars() {
+            stars = [];
+            for(let i=0; i<400; i++) {
+                const h = Math.random() * 360;
+                stars.push({
+                    x: Math.random() * width - width/2,
+                    y: Math.random() * height - height/2,
+                    z: Math.random() * width,
+                    color: `hsl(${h}, 80%, 70%)`
+                });
+            }
+        }
+
+        function animateStars() {
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, width, height);
+            
+            const speed = 2 + (STATE.level * 0.1); 
+
+            for(let i=0; i<stars.length; i++) {
+                let s = stars[i];
+                s.z -= speed;
+                if(s.z <= 0) {
+                    s.x = Math.random() * width - width/2;
+                    s.y = Math.random() * height - height/2;
+                    s.z = width;
+                }
+
+                let k = 128.0 / s.z;
+                let px = s.x * k + width/2;
+                let py = s.y * k + height/2;
+                
+                if(px >= 0 && px <= width && py >= 0 && py <= height) {
+                    let size = (1 - s.z / width) * 3.5;
+                    ctx.fillStyle = s.color;
+                    ctx.beginPath();
+                    ctx.arc(px, py, size, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+            requestAnimationFrame(animateStars);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        animateStars();
+
+        // --- Audio System ---
+        function initAudio() {
+            if (!STATE.audioCtx) {
+                STATE.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (STATE.audioCtx.state === 'suspended') {
+                STATE.audioCtx.resume();
+            }
+            if (!STATE.musicRunning) {
+                STATE.musicRunning = true;
+                scheduleNextBeat();
+            }
+        }
+
+        function playOsc(freq, type, duration, vol = 0.1, detune = 0, time = 0) {
+            if (!STATE.audioCtx) return;
+            const t = time || STATE.audioCtx.currentTime;
+            const osc = STATE.audioCtx.createOscillator();
+            const gain = STATE.audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            osc.detune.value = detune;
+            
+            osc.connect(gain);
+            gain.connect(STATE.audioCtx.destination);
+            
+            osc.start(t);
+            gain.gain.setValueAtTime(vol, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+            osc.stop(t + duration);
+        }
+
+        function getLevelMusicParams(level) {
+            const root = 55 + (level % 12) * 5; 
+            const tempo = CONFIG.baseBpm + (level % 30); 
+            return { root, tempo };
+        }
+
+        function scheduleNextBeat() {
+            if (!STATE.musicRunning) return;
+
+            const params = getLevelMusicParams(STATE.level);
+            const beatDur = 60 / params.tempo;
+            
+            playMusicLayers(STATE.audioCtx.currentTime, beatDur, params);
+
+            STATE.beatCount++;
+            setTimeout(() => {
+                scheduleNextBeat();
+            }, beatDur * 1000);
+        }
+
+        function playMusicLayers(time, duration, params) {
+            const oddBeat = STATE.beatCount % 2 !== 0;
+            const barStart = STATE.beatCount % 4 === 0;
+
+            playOsc(params.root, 'triangle', 0.1, 0.4, -10, time);
+
+            if (barStart) {
+                playOsc(params.root / 2, 'sawtooth', duration * 4, 0.1, 0, time);
+            }
+
+            if (oddBeat) {
+                playOsc(8000, 'square', 0.05, 0.05, 0, time);
+            }
+
+            if (Math.random() > 0.4) {
+                const scale = [1, 1.25, 1.5, 1.33, 2];
+                const note = params.root * 2 * scale[Math.floor(Math.random()*scale.length)];
+                playOsc(note, 'sine', 0.2, 0.1, 0, time + (duration/2));
+            }
+        }
+
+        function playKeySound(key) {
+            if (!STATE.audioCtx || !arrows[key]) return;
+            const freq = arrows[key].freq;
+            const t = STATE.audioCtx.currentTime;
+            const osc = STATE.audioCtx.createOscillator();
+            const gain = STATE.audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + 0.3);
+            
+            gain.gain.setValueAtTime(0.15, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.3);
+            
+            osc.connect(gain);
+            gain.connect(STATE.audioCtx.destination);
+            osc.start();
+            osc.stop(t + 0.3);
+        }
+
+        function playErrorSound() {
+            if (!STATE.audioCtx) return;
+            const t = STATE.audioCtx.currentTime;
+            playOsc(80, 'sawtooth', 0.5, 0.3, 0, t);
+            playOsc(75, 'sawtooth', 0.5, 0.3, 0, t);
+        }
+
+        function triggerFlash() {
+            els.flash.style.opacity = '1';
+            setTimeout(() => {
+                els.flash.style.opacity = '0';
+            }, 100);
+        }
+
+        function triggerVisuals(key) {
+            const style = arrows[key];
+            els.box.className = 'game-container ' + style.class;
+            
+            if(STATE.phase === 'RECALLING' || STATE.phase === 'READY_TO_RECALL') {
+                 els.box.classList.add('exam-mode');
+            }
+
+            els.arrow.innerHTML = style.char;
+            els.arrow.className = 'arrow-display active ' + style.txt;
+            els.lasers.h.style.backgroundColor = style.color;
+            els.lasers.v.style.backgroundColor = style.color;
+            els.lasers.h.style.opacity = '1';
+            els.lasers.v.style.opacity = '1';
+            
+            setTimeout(() => {
+                if(STATE.phase === 'RECALLING' || STATE.phase === 'READY_TO_RECALL') {
+                     els.box.className = 'game-container exam-mode';
+                } else {
+                     els.box.className = 'game-container';
+                }
+                
+                els.arrow.classList.remove('active');
+                els.lasers.h.style.opacity = '0';
+                els.lasers.v.style.opacity = '0';
+            }, 150);
+        }
+
+        // --- Core Logic ---
+
+        function startGame() {
+            els.modal.classList.add('hidden');
+            initAudio();
+            resetLevel(1, true); 
+        }
+
+        function resetLevel(lvl, fullReset = false) {
+            stopTimers();
+            STATE.level = lvl;
+            STATE.sequence = [];
+            STATE.phase = 'INPUT';
+            STATE.recallIndex = 0;
+            
+            if (fullReset) {
+                STATE.attemptsLeft = CONFIG.maxAttempts;
+            }
+
+            els.history.innerHTML = '';
+            
+            // Hide footer initially in new level
+            els.footer.classList.remove('visible');
+            els.footerText.innerText = "";
+            els.footerText.classList.remove('footer-sparkle');
+            
+            // Reset Box Style
+            els.box.classList.remove('exam-mode');
+            els.attempts.classList.remove('visible');
+
+            updateUI();
+            
+            // Set text for Input Phase
+            els.status.innerText = "BITTE EINE SEQUENZ ERSTELLEN";
+            els.status.className = "status-text status-trip"; 
+            
+            els.timer.innerText = "--:--";
+        }
+
+        function updateUI() {
+            els.level.innerText = STATE.level;
+            els.attempts.innerText = `VERSUCHE: ${STATE.attemptsLeft} / ${CONFIG.maxAttempts}`;
+            
+            let current = 0;
+            if (STATE.phase === 'INPUT') {
+                current = STATE.sequence.length;
+            } else if (STATE.phase === 'READING') {
+                current = STATE.sequence.length; // Show full count during reading
+            } else {
+                current = STATE.recallIndex;
+            }
+            
+            els.counter.innerText = `KOMBINATION: ${current} / ${STATE.level}`;
+        }
+
+        function handleInput(key) {
+            if (!arrows[key]) return;
+            
+            // Block input during READING or FAILED phases
+            if (STATE.phase === 'READING' || STATE.phase === 'FAILED') return;
+
+            triggerVisuals(key);
+            playKeySound(key); 
+
+            if (STATE.phase === 'INPUT') {
+                STATE.sequence.push(key);
+                updateUI();
+                startInputTimer();
+                if (STATE.sequence.length >= STATE.level) {
+                    stopTimers();
+                    startReadingPhase(); // Go to Reading phase first
+                }
+            }
+            else if (STATE.phase === 'READY_TO_RECALL' || STATE.phase === 'RECALLING') {
+                if (STATE.phase === 'READY_TO_RECALL') {
+                    STATE.phase = 'RECALLING';
+                    startRecallTimer();
+                } else {
+                    resetRecallTimer();
+                }
+                checkRecall(key);
+            }
+        }
+
+        // --- NEW: Reading Phase ---
+        function startReadingPhase() {
+            STATE.phase = 'READING';
+            
+            // Show Wisdom
+            const affirmationIndex = (STATE.level - 1) % AFFIRMATIONS.length;
+            els.footerText.innerText = AFFIRMATIONS[affirmationIndex];
+            els.footerText.classList.remove('footer-sparkle');
+            els.footer.classList.add('visible');
+
+            // Status Update
+            els.status.innerText = "BOTSCHAFT EMPFANGEN...";
+            els.status.className = "status-text status-reading";
+            
+            // Timer visual for reading (optional, just static text here)
+            els.timer.innerText = "LESEN...";
+
+            // Wait 4 seconds then start exam
+            setTimeout(() => {
+                startRecallPhase();
+            }, CONFIG.readingTime);
+        }
+
+        function startRecallPhase() {
+            STATE.phase = 'READY_TO_RECALL';
+            STATE.recallIndex = 0;
+            els.history.innerHTML = ''; 
+            
+            // Exam Visuals
+            els.box.classList.add('exam-mode');
+            els.attempts.classList.add('visible');
+
+            // Set Text for Exam Phase
+            els.status.innerText = "PRÜFUNG";
+            els.status.className = "status-text status-static"; 
+            
+            updateUI();
+            els.timer.innerHTML = "<span class='green-text'>BEREIT</span>";
+        }
+
+        function checkRecall(key) {
+            const expected = STATE.sequence[STATE.recallIndex];
+
+            if (key === expected) {
+                STATE.recallIndex++;
+                
+                const arrowSpan = document.createElement('span');
+                arrowSpan.innerText = arrows[key].char;
+                arrowSpan.className = 'history-arrow';
+                els.history.appendChild(arrowSpan);
+
+                updateUI();
+
+                if (STATE.recallIndex >= STATE.level) {
+                    levelUp();
+                }
+            } else {
+                failLevel();
+            }
+        }
+
+        // --- Timers ---
+        let activeTimerInterval;
+        let activeDeadline;
+
+        function startInputTimer() {
+            if (activeTimerInterval) clearInterval(activeTimerInterval);
+            activeDeadline = Date.now() + CONFIG.timePerKeyInput;
+            
+            activeTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const left = activeDeadline - now;
+                if (left <= 0) {
+                    clearInterval(activeTimerInterval);
+                    els.timer.innerText = "0.00";
+                    resetLevel(STATE.level, true); 
+                } else {
+                    els.timer.innerText = (left / 1000).toFixed(2);
+                }
+            }, 10);
+        }
+
+        function startRecallTimer() {
+            activeDeadline = Date.now() + CONFIG.timePerKeyRecall;
+            if (activeTimerInterval) clearInterval(activeTimerInterval);
+            
+            activeTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const left = activeDeadline - now;
+                if (left <= 0) {
+                    clearInterval(activeTimerInterval);
+                    els.timer.innerText = "0.00";
+                    failLevel(); 
+                } else {
+                    els.timer.innerText = (left / 1000).toFixed(2);
+                }
+            }, 10);
+        }
+
+        function resetRecallTimer() { startRecallTimer(); }
+        function stopTimers() {
+            if (activeTimerInterval) clearInterval(activeTimerInterval);
+            els.timer.innerText = "--:--";
+        }
+
+        function levelUp() {
+            stopTimers();
+            triggerFlash(); 
+            STATE.phase = 'IDLE';
+            
+            // Reset visuals
+            els.box.classList.remove('exam-mode');
+            els.attempts.classList.remove('visible');
+            els.footer.classList.remove('visible'); // Hide footer on level up
+
+            setTimeout(() => {
+                if (STATE.level < CONFIG.maxLevel) {
+                    resetLevel(STATE.level + 1, true); 
+                } else {
+                    alert("ULTIMATE MEMORY REACHED");
+                }
+            }, 500);
+        }
+
+        function failLevel() {
+            stopTimers();
+            playErrorSound();
+            STATE.phase = 'FAILED';
+            
+            STATE.attemptsLeft--;
+            updateUI();
+
+            els.box.style.borderColor = "var(--accent-red)";
+            els.box.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
+
+            setTimeout(() => {
+                els.box.style.borderColor = ""; 
+                els.box.style.backgroundColor = "";
+                
+                if (STATE.attemptsLeft > 0) {
+                    els.status.innerText = "VERSUCH " + (CONFIG.maxAttempts - STATE.attemptsLeft) + " GESCHEITERT";
+                    setTimeout(() => {
+                        startRecallPhase(); 
+                    }, 1000);
+                } else {
+                    els.status.innerText = "ABSTIEG";
+                    
+                    setTimeout(() => {
+                        if (STATE.level > 1) {
+                            resetLevel(STATE.level - 1, true); 
+                        } else {
+                            resetLevel(1, true);
+                        }
+                    }, 2000); 
+                }
+
+            }, 200);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (arrows[e.code]) {
+                e.preventDefault();
+                handleInput(e.code);
+            }
+        });
+
+        document.querySelector('.mobile-controls').addEventListener('touchstart', (e) => {
+            if (e.target.dataset.key) {
+                e.preventDefault();
+                handleInput(e.target.dataset.key);
+            }
+        });
+        
+        if(els.startBtn) els.startBtn.onclick = startGame;
+
+    </script>
+</body>
+</html>
